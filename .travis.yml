@@ -1,0 +1,17 @@
+os: linux
+language: python
+python:
+  - "3.7"
+  - "3.8"
+  - "3.9"
+
+install:
+  - pip install -r requirements.txt
+  - pip install -r requirements_tests.txt
+
+script:
+  - python -m pytest --cov=numerbay
+  - flake8 numerbay
+
+after_success:
+  - codecov
