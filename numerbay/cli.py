@@ -51,6 +51,12 @@ def orders():
 
 
 @cli.command()
+def sales():
+    """Get all your sales!"""
+    click.echo(prettify(nbay.get_my_sales()))
+
+
+@cli.command()
 def listings():
     """Get all your listings!"""
     click.echo(prettify(nbay.get_my_listings()))

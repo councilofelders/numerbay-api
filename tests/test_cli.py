@@ -37,6 +37,13 @@ def test_orders(mocked, login):
     assert result.exit_code == 0
 
 
+@patch('numerbay.NumerBay.get_my_sales')
+def test_sales(mocked, login):
+    result = CliRunner().invoke(cli.sales)
+    # just testing if calling works fine
+    assert result.exit_code == 0
+
+
 @patch('numerbay.NumerBay.upload_artifact')
 def test_submit(mocked, login, tmpdir):
     path = tmpdir.join("somefilepath")

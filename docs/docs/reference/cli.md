@@ -49,6 +49,15 @@ def orders()
 
 Get all your orders!
 
+#### sales
+
+```python
+@cli.command()
+def sales()
+```
+
+Get all your sales!
+
 #### listings
 
 ```python

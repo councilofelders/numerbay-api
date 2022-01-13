@@ -2,4 +2,9 @@
 Notable changes to this project.
 
 ## dev
+- added `get_my_sales`
+- set pypi GitHub workflow to run only on tagged commits
+- trimmed docs to API reference only
+
+## [0.1.3] - 2022-01-09
 - initial code release

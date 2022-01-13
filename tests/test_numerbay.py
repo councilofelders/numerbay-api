@@ -150,6 +150,41 @@ def test_get_my_orders(api):
 
 
 @responses.activate
+def test_get_my_sales(api):
+    api.user_id = 2
+    api.token = "Token"
+    data = {
+        'total': 1,
+        'data': [{
+            "date_order": "2021-12-25T06:34:58.047278",
+            "round_order": 296,
+            "quantity": 1,
+            "price": 9,
+            "currency": "NMR",
+            "mode": "file",
+            "stake_limit": None,
+            "submit_model_id": None,
+            "submit_model_name": None,
+            "submit_state": None,
+            "chain": "ethereum",
+            "from_address": "0x00000000000000000000000000000fromaddress",
+            "to_address": "0x0000000000000000000000000000000toaddress",
+            "transaction_hash": "0x09bd2a0f814a745f62cb35f1a41dd18208fb653210ff677e946747a20e5abcdef",
+            "state": "confirmed",
+            "applied_coupon_id": 1,
+            "coupon": None,
+            "coupon_specs": None,
+            "id": 126,
+            "product": {},
+            "buyer": {"id": 2, "username": "someusername"}
+        }]
+    }
+    responses.add(responses.POST, f"{API_ENDPOINT_URL}/orders/search", json=data)
+    orders = api.get_my_sales()
+    assert orders[0]["buyer"]["username"] == data["data"][0]["buyer"]["username"]
+
+
+@responses.activate
 def test_upload_artifact(api, tmpdir):
     api.user_id = 2
     api.token = "Token"

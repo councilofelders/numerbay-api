@@ -28,16 +28,6 @@ const config = {
           editUrl:
             'https://github.com/councilofelders/numerbay/tree/master/docs/',
         },
-        blog: {
-          path: 'updates',
-          blogTitle: 'Project Updates',
-          blogDescription: 'Project Updates',
-          routeBasePath: 'updates',
-          showReadingTime: true,
-          // Please change this to your repo.
-          editUrl:
-            'https://github.com/councilofelders/numerbay/tree/master/docs/',
-        },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
         },
@@ -56,17 +46,10 @@ const config = {
         },
         items: [
           {
-            type: 'doc',
-            docId: 'intro',
-            position: 'left',
-            label: 'Tutorial',
-          },
-          {
             "to": "/docs/reference/numerbay",
             "label": "Python Client",
             "position": "left"
           },
-          { to: '/updates', label: 'Project Updates', position: 'left' },
           {
             href: 'https://github.com/councilofelders/numerbay',
             label: 'GitHub',
@@ -80,10 +63,6 @@ const config = {
           {
             title: 'Docs',
             items: [
-              {
-                label: 'Tutorial',
-                to: '/docs/intro',
-              },
               {
                 label: 'API Reference (Swagger)',
                 href: 'https://numerbay.ai/docs',
@@ -132,10 +111,6 @@ const config = {
             title: 'More',
             items: [
               {
-                label: 'Project Updates',
-                to: '/updates',
-              },
-              {
                 label: 'GitHub',
                 href: 'https://github.com/councilofelders/numerbay',
               },
@@ -157,7 +132,7 @@ const config = {
         // ... Your options.
         // `hashed` is recommended as long-term-cache of index file is possible.
         hashed: true,
-        blogDir:"./updates/"
+        // blogDir:"./updates/"
         // For Docs using Chinese, The `language` is recommended to set to:
         // ```
         // language: ["en", "zh"],

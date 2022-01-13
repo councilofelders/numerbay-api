@@ -1,4 +1,4 @@
-""" collection of utility functions"""
+""" collection of utility functions (from numerapi: https://github.com/uuazed/numerapi)"""
 
 import os
 import decimal
