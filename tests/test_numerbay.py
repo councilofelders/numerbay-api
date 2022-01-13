@@ -288,3 +288,32 @@ def test_download_artifact(api, tmpdir):
     responses.add(responses.GET, f"{API_ENDPOINT_URL}/products/{product_id}/artifacts", json=data)
 
     api.download_artifact(dest_path=tmpdir.join("artifact.csv"), product_full_name="numerai-predictions-somemodel")
+
+
+@responses.activate
+def test_download_artifact_no_active_artifact(api):
+    api.user_id = 2
+    api.token = "Token"
+    api.show_progress_bars = False
+
+    product_id = 4
+
+    # download file with product_full_name only
+    data = {
+        'total': 0,
+        'data': [{
+            "id": product_id,
+            "name": "somemodel",
+            "sku": "numerai-predictions-somemodel",
+        }]
+    }
+    responses.add(responses.POST, f"{API_ENDPOINT_URL}/products/search-authenticated", json=data)
+    data = {
+        'total': 0,
+        'data': []
+    }
+    responses.add(responses.GET, f"{API_ENDPOINT_URL}/products/{product_id}/artifacts", json=data)
+
+    with pytest.raises(ValueError) as err:
+        api.download_artifact(dest_path="artifact.csv", product_full_name="numerai-predictions-somemodel")
+    assert str(err.value).startswith("Failed to resolve a valid artifact ID")

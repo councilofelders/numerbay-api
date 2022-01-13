@@ -481,8 +481,11 @@ class NumerBay:
             # fail!
             raise ValueError(err)
 
-        first_artifact = data.get("data", [])[0]
-        return first_artifact["id"]
+        artifacts = data.get("data", [])
+        if len(artifacts) > 0:
+            first_artifact = artifacts[0]
+            return first_artifact["id"]
+        return None
         # orders = self.get_my_orders()
         # for order in orders:
         #     if order["product"]["id"] == product_id:
@@ -612,8 +615,9 @@ class NumerBay:
         )
         if artifact_id is None:
             raise ValueError(
-                "A valid artifact ID is required, "
-                "make sure you have an active order for this product"
+                "Failed to resolve a valid artifact ID: "
+                "make sure you have an active order for this product, "
+                "and an active artifact is available for download"
             )
 
         if dest_path is None:
@@ -629,6 +633,7 @@ class NumerBay:
             f"/generate-download-url",
             headers={"Authorization": f"Bearer {self.token}"},
         )
+        print(f"data: {data}")
 
         if isinstance(data, dict) and "detail" in data:
             err = self._handle_call_error(data["detail"])

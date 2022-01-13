@@ -34,6 +34,7 @@ To get started with the cli interface, let's take a look at the help page:
           download  Download artifact file.
           listings  Get all your listings!
           orders    Get all your orders!
+          sales     Get all your sales!
           submit    Upload artifact from file.
           version   Installed numerbay version.
 
