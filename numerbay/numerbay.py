@@ -1,4 +1,10 @@
-"""NumerBay API module"""
+"""NumerBay API module
+
+Install via:
+```commandline
+pip install numerbay
+```
+"""
 
 import os
 import logging

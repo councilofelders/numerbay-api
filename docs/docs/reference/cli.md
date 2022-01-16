@@ -3,7 +3,7 @@ sidebar_label: cli
 title: cli
 ---
 
-Access the numerai API via command line
+Access the NumerBay API via command line
 
 ## CommonJSONEncoder Objects
 

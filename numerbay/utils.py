@@ -121,7 +121,7 @@ def get_with_err_handling(
 def post_with_err_handling(
     url: str,
     body: str = None,
-    json: str = None, # pylint: disable=W0621
+    json: str = None,  # pylint: disable=W0621
     headers: Dict = None,
     timeout: Optional[int] = None,
 ) -> Dict:

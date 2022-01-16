@@ -5,6 +5,11 @@ title: numerbay
 
 NumerBay API module
 
+Install via:
+```commandline
+pip install numerbay
+```
+
 ## NumerBay Objects
 
 ```python

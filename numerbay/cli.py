@@ -1,4 +1,4 @@
-""" Access the numerai API via command line"""
+""" Access the NumerBay API via command line"""
 
 import json
 import datetime
