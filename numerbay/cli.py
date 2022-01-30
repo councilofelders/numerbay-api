@@ -90,6 +90,7 @@ def submit(path, product_id, product_full_name, order_id):
     )
 
 
+# pylint: disable=R0913
 @cli.command()
 @click.option("--product_id", type=int, default=None, help="NumerBay product ID")
 @click.option(

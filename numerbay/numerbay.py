@@ -17,6 +17,7 @@ import requests
 from numerbay import utils
 
 API_ENDPOINT_URL = "https://numerbay.ai/backend-api/v1"
+API_ENDPOINT_URL = "http://localhost/backend-api/v1"
 
 
 class NumerBay:
@@ -338,7 +339,7 @@ class NumerBay:
         return data
 
     def _search_products(
-        self, id: int = None, name: str = None, owner_criteria: bool = False
+        self, product_id: int = None, name: str = None, owner_criteria: bool = False
     ):
         json = {
             "term": name,
@@ -347,8 +348,8 @@ class NumerBay:
             else None,
             "sort": "latest",
         }
-        if id is not None:
-            json["id"] = id
+        if product_id is not None:
+            json["id"] = product_id
         data = utils.post_with_err_handling(
             f"{API_ENDPOINT_URL}/products/search-authenticated",
             json=json,
@@ -489,7 +490,7 @@ class NumerBay:
 
     def _resolve_product(self, product_id: int = None, product_full_name: str = None):
         if isinstance(product_id, int):
-            products = self._search_products(id=product_id)
+            products = self._search_products(product_id=product_id)
             if len(products) > 0:
                 return products[0]
         if product_full_name is None:
@@ -530,7 +531,7 @@ class NumerBay:
     ):
         # if product_id is None:
         #     return None
-        if isinstance(artifact_id, int) or isinstance(artifact_id, str):
+        if isinstance(artifact_id, (int, str)):
             return artifact_id
 
         if (
@@ -543,7 +544,6 @@ class NumerBay:
             if len(artifacts) > 0:
                 last_artifact = artifacts[-1]
                 return last_artifact["id"]
-            return None
         else:
             # resolve unencrypted artifact
             # list product artifacts
@@ -561,7 +561,7 @@ class NumerBay:
             if len(artifacts) > 0:
                 last_artifact = artifacts[-1]
                 return last_artifact["id"]
-            return None
+        return None
 
     def _resolve_artifact_name(self, product_id: int, artifact_id: Union[int, str]):
         if isinstance(artifact_id, int):
@@ -583,7 +583,6 @@ class NumerBay:
             for artifact in data.get("data", []):
                 if artifact["id"] == artifact_id:
                     return artifact["object_name"]
-            return None
         else:
             # resolve encrypted artifact
             data = utils.get_with_err_handling(
@@ -596,6 +595,7 @@ class NumerBay:
                 # fail!
                 raise ValueError(err)
             return data["object_name"]
+        return None
 
     def _upload_encrypted_artifact(
         self,
@@ -626,6 +626,32 @@ class NumerBay:
         )
         return data
 
+    def _upload_unencrypted_artifact(
+        self,
+        file_path: str = "predictions.csv",
+        product_id: int = None,
+        df: pd.DataFrame = None,
+    ):
+        # write the pandas DataFrame as a binary buffer if provided
+        buffer_csv = None
+
+        if df is not None:
+            buffer_csv = BytesIO(df.to_csv(index=False).encode())
+            buffer_csv.name = file_path
+
+        upload_auth = self._upload_auth(file_path, product_id)
+
+        headers = {"Content-type": "application/octet-stream"}
+        with open(file_path, "rb") if df is None else buffer_csv as file:
+            requests.put(upload_auth["url"], data=file, headers=headers)
+
+        artifact_id = upload_auth["id"]
+        data = utils.post_with_err_handling(
+            f"{API_ENDPOINT_URL}/products/{product_id}/artifacts/{artifact_id}/validate-upload",
+            headers={"Authorization": f"Bearer {self.token}"},
+        )
+        return data
+
     def upload_artifact(
         self,
         file_path: str = "predictions.csv",
@@ -640,7 +666,8 @@ class NumerBay:
             product_id (int): NumerBay product ID
             product_full_name (str): NumerBay product full name (e.g. numerai-predictions-numerbay),
                 used for resolving product_id if product_id is not provided
-            order_id (int, optional): NumerBay order ID, used for encrypted per-order artifact upload
+            order_id (int, optional): NumerBay order ID,
+                used for encrypted per-order artifact upload
             df (pandas.DataFrame): pandas DataFrame to upload, if function is
                 given df and file_path, df will be uploaded.
         Returns:
@@ -667,7 +694,7 @@ class NumerBay:
         use_encryption = product.get("use_encryption", False)
 
         orders_to_upload = []
-        has_unencrypted_sale = False or not use_encryption
+        has_unencrypted_sale = not use_encryption
         if use_encryption:
             active_sales = self.get_my_sales(active_only=True)
             for sale in active_sales:
@@ -699,23 +726,10 @@ class NumerBay:
             return uploaded_artifacts
 
         # upload unencrypted
-        # write the pandas DataFrame as a binary buffer if provided
-        buffer_csv = None
-
-        if df is not None:
-            buffer_csv = BytesIO(df.to_csv(index=False).encode())
-            buffer_csv.name = file_path
-
-        upload_auth = self._upload_auth(file_path, product_id)
-
-        headers = {"Content-type": "application/octet-stream"}
-        with open(file_path, "rb") if df is None else buffer_csv as file:
-            requests.put(upload_auth["url"], data=file, headers=headers)
-
-        artifact_id = upload_auth["id"]
-        data = utils.post_with_err_handling(
-            f"{API_ENDPOINT_URL}/products/{product_id}/artifacts/{artifact_id}/validate-upload",
-            headers={"Authorization": f"Bearer {self.token}"},
+        data = self._upload_unencrypted_artifact(
+            file_path=file_path,
+            product_id=product_id,
+            df=df,
         )
         uploaded_artifacts.append(data)
 
@@ -723,6 +737,7 @@ class NumerBay:
             return uploaded_artifacts
         return uploaded_artifacts[0]
 
+    # pylint: disable=R0913
     def download_artifact(
         self,
         filename: str = None,
@@ -740,9 +755,11 @@ class NumerBay:
             dest_path (str, optional): complate path where the file should be
                 stored, defaults to the same name as the source file
             product_id (int, optional): NumerBay product ID
-            product_full_name (str, optional): NumerBay product full name (e.g. numerai-predictions-numerbay),
+            product_full_name (str, optional): NumerBay product full name
+                (e.g. numerai-predictions-numerbay),
                 used for resolving product_id if product_id is not provided
-            order_id (int, optional): NumerBay order ID, used for encrypted per-order artifact download
+            order_id (int, optional): NumerBay order ID,
+                used for encrypted per-order artifact download
             artifact_id (str or int, optional): Artifact ID for the file to download,
                 defaults to the first artifact for your active order for the product
             key_path (int, optional): path to buyer's exported NumerBay key file

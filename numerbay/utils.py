@@ -13,7 +13,7 @@ import requests
 import tqdm
 
 import nacl.utils
-from nacl.public import PrivateKey, SealedBox
+from nacl.public import SealedBox
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ def post_with_err_handling(
 
 def encrypt_file_object(file: Union[BinaryIO, BytesIO], key: str):
     """encrypt a file stream"""
-    logger.info(f"encrypting file")
+    logger.info("encrypting file")
     public_key = nacl.public.PublicKey(key, encoder=nacl.encoding.Base64Encoder)
     box = SealedBox(public_key)
     encrypted_content = box.encrypt(plaintext=file.read())
@@ -172,7 +172,7 @@ def decrypt_file(dest_path: str, key_path: str = None, key_base64: str = None):
         raise ValueError("A valid NumerBay key file is required")
 
     if key_base64 is None and key_path:
-        with open(key_path) as key_file:
+        with open(key_path, "r", encoding="utf8") as key_file:
             key_dict = json.load(key_file)
             key_base64 = key_dict["private_key"]
 
