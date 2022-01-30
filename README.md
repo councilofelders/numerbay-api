@@ -52,6 +52,8 @@ Each command has it's own help page, for example:
       --product_full_name TEXT  NumerBay product full name (e.g. numerai-
                                 predictions-numerbay), used for resolving
                                 product_id if product_id is not provided
+      --order_id INTEGER        NumerBay order ID, used for encrypted per-order
+                                artifact upload
       --help                    Show this message and exit.
 
 

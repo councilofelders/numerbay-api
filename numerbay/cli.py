@@ -68,15 +68,24 @@ def listings():
     "--product_full_name",
     type=str,
     default=None,
-    help="NumerBay product full name (e.g. numerai-predictions-numerbay), \
-    used for resolving product_id if product_id is not provided",
+    help="NumerBay product full name (e.g. numerai-predictions-numerbay), "
+    "used for resolving product_id if product_id is not provided",
+)
+@click.option(
+    "--order_id",
+    type=int,
+    default=None,
+    help="NumerBay order ID, " "used for encrypted per-order artifact upload",
 )
 @click.argument("path", type=click.Path(exists=True))
-def submit(path, product_id, product_full_name):
+def submit(path, product_id, product_full_name, order_id):
     """Upload artifact from file."""
     click.echo(
         nbay.upload_artifact(
-            path, product_id=product_id, product_full_name=product_full_name
+            path,
+            product_id=product_id,
+            product_full_name=product_full_name,
+            order_id=order_id,
         )
     )
 
@@ -87,8 +96,14 @@ def submit(path, product_id, product_full_name):
     "--product_full_name",
     type=str,
     default=None,
-    help="NumerBay product full name (e.g. numerai-predictions-numerbay), \
-    used for resolving product_id if product_id is not provided",
+    help="NumerBay product full name (e.g. numerai-predictions-numerbay), "
+    "used for resolving product_id if product_id is not provided",
+)
+@click.option(
+    "--order_id",
+    type=int,
+    default=None,
+    help="NumerBay order ID, " "used for encrypted per-order artifact download",
 )
 @click.option(
     "--artifact_id",
@@ -97,13 +112,34 @@ def submit(path, product_id, product_full_name):
     help="Artifact ID for the file to download, \
     defaults to the first artifact for your active order for the product",
 )
+@click.option(
+    "--key_path",
+    type=str,
+    default=None,
+    help="path to buyer's exported NumerBay key file",
+)
+@click.option(
+    "--key_base64",
+    type=str,
+    default=None,
+    help="buyer's NumerBay private key base64 string (used for tests)",
+)
 @click.option("--filename", help="filename to store as")
 @click.option(
     "--dest_path",
-    help="complate path where the file should be stored, \
-    defaults to the same name as the source file",
+    help="complate path where the file should be stored, "
+    "defaults to the same name as the source file",
 )
-def download(filename, dest_path, product_id, product_full_name, artifact_id):
+def download(
+    filename,
+    dest_path,
+    product_id,
+    product_full_name,
+    order_id,
+    artifact_id,
+    key_path,
+    key_base64,
+):
     """Download artifact file."""
     click.echo(
         nbay.download_artifact(
@@ -111,7 +147,10 @@ def download(filename, dest_path, product_id, product_full_name, artifact_id):
             dest_path=dest_path,
             product_id=product_id,
             product_full_name=product_full_name,
+            order_id=order_id,
             artifact_id=artifact_id,
+            key_path=key_path,
+            key_base64=key_base64,
         )
     )
 

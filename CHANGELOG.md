@@ -2,6 +2,8 @@
 Notable changes to this project.
 
 ## dev
+- added support for per-order artifact upload and encryption
+- added support for per-order artifact download and decryption
 
 ## [0.1.4] - 2022-01-16
 - added `get_my_sales`

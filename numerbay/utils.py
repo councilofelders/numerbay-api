@@ -1,15 +1,19 @@
-""" collection of utility functions (from numerapi: https://github.com/uuazed/numerapi)"""
-
+""" collection of utility functions (adapted from numerapi: https://github.com/uuazed/numerapi)"""
+import io
 import os
 import decimal
 import logging
 import datetime
 import json
-from typing import Optional, Dict
+from io import BytesIO
+from typing import Optional, Dict, Union, BinaryIO
 
 import dateutil.parser
 import requests
 import tqdm
+
+import nacl.utils
+from nacl.public import PrivateKey, SealedBox
 
 logger = logging.getLogger(__name__)
 
@@ -149,3 +153,36 @@ def post_with_err_handling(
         logger.error(f"Did not receive a valid JSON: {err}")
 
     return {}
+
+
+def encrypt_file_object(file: Union[BinaryIO, BytesIO], key: str):
+    """encrypt a file stream"""
+    logger.info(f"encrypting file")
+    public_key = nacl.public.PublicKey(key, encoder=nacl.encoding.Base64Encoder)
+    box = SealedBox(public_key)
+    encrypted_content = box.encrypt(plaintext=file.read())
+    return io.BytesIO(encrypted_content)
+
+
+def decrypt_file(dest_path: str, key_path: str = None, key_base64: str = None):
+    """decrypt and overwrite a file"""
+    if not key_path:
+        key_path = os.getenv("NUMERBAY_KEY_PATH")
+    if not key_path and not key_base64:
+        raise ValueError("A valid NumerBay key file is required")
+
+    if key_base64 is None and key_path:
+        with open(key_path) as key_file:
+            key_dict = json.load(key_file)
+            key_base64 = key_dict["private_key"]
+
+    private_key = nacl.public.PrivateKey(
+        key_base64, encoder=nacl.encoding.Base64Encoder
+    )
+    unbox = SealedBox(private_key)
+    logger.info(f"decrypting {dest_path}")
+    with open(dest_path, "rb+") as file:
+        decrypted_content = unbox.decrypt(ciphertext=file.read())
+        file.seek(0)
+        file.write(decrypted_content)
+        file.truncate()

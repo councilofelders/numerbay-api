@@ -8,7 +8,7 @@ pip install numerbay
 
 import os
 import logging
-from typing import Dict, List
+from typing import Dict, List, Union
 from io import BytesIO
 
 import pandas as pd
@@ -178,6 +178,8 @@ class NumerBay:
                  * id (`int`)
                  * product (`dict`)
                  * buyer (`dict`)
+                 * buyer_public_key (`str`)
+                 * artifacts (`list`)
         Example:
             ```python
             api = NumerBay(username="..", password="..")
@@ -208,7 +210,9 @@ class NumerBay:
                 "buyer":{
                     "id":2,
                     "username":"myusername"
-                }
+                },
+                "buyer_public_key":"yqKFQtzss8vRL7devlvZY70v5WUrS3BfKfPFzTnYit4=",
+                "artifacts":[...]
             }, ...]
             ```
         """
@@ -224,8 +228,10 @@ class NumerBay:
             raise ValueError(err)
         return data.get("data", [])
 
-    def get_my_sales(self) -> List:
+    def get_my_sales(self, active_only: bool = False) -> List:
         """Get all your sales (including pending and expired sales).
+        Args:
+            active_only (bool, optional): whether to fetch only active sale orders
         Returns:
             list: List of dicts with the following structure:
 
@@ -250,6 +256,8 @@ class NumerBay:
                  * id (`int`)
                  * product (`dict`)
                  * buyer (`dict`)
+                 * buyer_public_key (`str`)
+                 * artifacts (`list`)
         Example:
             ```python
             api = NumerBay(username="..", password="..")
@@ -280,13 +288,18 @@ class NumerBay:
                 "buyer":{
                     "id":2,
                     "username":"someusername"
-                }
+                },
+                "buyer_public_key":"yqKFQtzss8vRL7devlvZY70v5WUrS3BfKfPFzTnYit4=",
+                "artifacts":[...]
             }, ...]
             ```
         """
+        json = {"role": "seller"}
+        if active_only:
+            json["filters"] = {"active": True}
         data = utils.post_with_err_handling(
             f"{API_ENDPOINT_URL}/orders/search",
-            json={"role": "seller"},
+            json=json,
             headers={"Authorization": f"Bearer {self.token}"},
         )
 
@@ -309,17 +322,36 @@ class NumerBay:
             raise ValueError(err)
         return data
 
-    def _search_products(self, name: str = None, owner_criteria: bool = False):
+    def _upload_auth_order_artifact(
+        self, file_path: str, order_id: int
+    ) -> Dict[str, str]:
+        data = utils.post_with_err_handling(
+            f"{API_ENDPOINT_URL}/artifacts/generate-upload-url",
+            body={"order_id": order_id, "filename": os.path.basename(file_path)},
+            headers={"Authorization": f"Bearer {self.token}"},
+        )
 
+        if data and "detail" in data:
+            err = self._handle_call_error(data["detail"])
+            # fail!
+            raise ValueError(err)
+        return data
+
+    def _search_products(
+        self, id: int = None, name: str = None, owner_criteria: bool = False
+    ):
+        json = {
+            "term": name,
+            "filters": {"user": {"in": [f"{self.user_id}"]}}
+            if owner_criteria
+            else None,
+            "sort": "latest",
+        }
+        if id is not None:
+            json["id"] = id
         data = utils.post_with_err_handling(
             f"{API_ENDPOINT_URL}/products/search-authenticated",
-            json={
-                "term": name,
-                "filters": {"user": {"in": [f"{self.user_id}"]}}
-                if owner_criteria
-                else None,
-                "sort": "latest",
-            },
+            json=json,
             headers={"Authorization": f"Bearer {self.token}"},
         )
 
@@ -455,11 +487,11 @@ class NumerBay:
         """
         return self._search_products(owner_criteria=True)
 
-    def _resolve_product_id(
-        self, product_id: int = None, product_full_name: str = None
-    ):
+    def _resolve_product(self, product_id: int = None, product_full_name: str = None):
         if isinstance(product_id, int):
-            return product_id
+            products = self._search_products(id=product_id)
+            if len(products) > 0:
+                return products[0]
         if product_full_name is None:
             return None
         products = self._search_products(name=product_full_name.split("-")[-1])
@@ -468,84 +500,152 @@ class NumerBay:
                 isinstance(product_full_name, str)
                 and product["sku"] == product_full_name
             ):
-                return product["id"]
+                return product
         return None
 
-    def _resolve_artifact_id(self, product_id: int, artifact_id: int = None):
-        if product_id is None:
-            return None
-        if isinstance(artifact_id, int):
+    def _resolve_order(
+        self,
+        product_id: int = None,
+        order_id: int = None,
+        artifact_id: Union[int, str] = None,
+    ):
+        my_orders = self.get_my_orders()
+        for order in my_orders:
+            if order["state"] != "confirmed":
+                continue
+            if isinstance(artifact_id, str):
+                for artifact in order["artifacts"]:
+                    if artifact["id"] == artifact_id:
+                        return order
+            else:
+                if order["id"] == order_id or order["product"]["id"] == product_id:
+                    return order
+        return None
+
+    def _resolve_artifact_id(
+        self,
+        product_id: int = None,
+        order: Dict = None,
+        artifact_id: Union[int, str] = None,
+    ):
+        # if product_id is None:
+        #     return None
+        if isinstance(artifact_id, int) or isinstance(artifact_id, str):
             return artifact_id
-        # list product artifacts
-        data = utils.get_with_err_handling(
-            f"{API_ENDPOINT_URL}/products/{product_id}/artifacts",
-            headers={"Authorization": f"Bearer {self.token}"},
-        )
 
-        if data and "detail" in data:
-            err = self._handle_call_error(data["detail"])
-            # fail!
-            raise ValueError(err)
+        if (
+            order is not None
+            and isinstance(order, dict)
+            and order.get("buyer_public_key", None) is not None
+        ):
+            # resolve encrypted artifact
+            artifacts = order.get("artifacts", [])
+            if len(artifacts) > 0:
+                last_artifact = artifacts[-1]
+                return last_artifact["id"]
+            return None
+        else:
+            # resolve unencrypted artifact
+            # list product artifacts
+            data = utils.get_with_err_handling(
+                f"{API_ENDPOINT_URL}/products/{product_id}/artifacts",
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
 
-        artifacts = data.get("data", [])
-        if len(artifacts) > 0:
-            first_artifact = artifacts[0]
-            return first_artifact["id"]
-        return None
-        # orders = self.get_my_orders()
-        # for order in orders:
-        #     if order["product"]["id"] == product_id:
-        #         # list product artifacts
-        #         data = utils.get_with_err_handling(
-        #             f"{API_ENDPOINT_URL}/products/{product_id}/artifacts",
-        #             headers={"Authorization": f"Bearer {self.token}"})
-        #
-        #         if data and "detail" in data:
-        #             err = self._handle_call_error(data['detail'])
-        #             # fail!
-        #             raise ValueError(err)
-        #
-        #         first_artifact = data.get("data", [])[0]
-        #         return first_artifact["id"]
-        # return None
+            if data and "detail" in data:
+                err = self._handle_call_error(data["detail"])
+                # fail!
+                raise ValueError(err)
 
-    def _resolve_artifact_name(self, product_id: int, artifact_id: int):
-        if product_id is None:
+            artifacts = data.get("data", [])
+            if len(artifacts) > 0:
+                last_artifact = artifacts[-1]
+                return last_artifact["id"]
             return None
 
-        # list product artifacts
-        data = utils.get_with_err_handling(
-            f"{API_ENDPOINT_URL}/products/{product_id}/artifacts",
+    def _resolve_artifact_name(self, product_id: int, artifact_id: Union[int, str]):
+        if isinstance(artifact_id, int):
+            # resolve unencrypted artifact
+            if product_id is None:
+                return None
+
+            # list product artifacts
+            data = utils.get_with_err_handling(
+                f"{API_ENDPOINT_URL}/products/{product_id}/artifacts",
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+
+            if data and "detail" in data:
+                err = self._handle_call_error(data["detail"])
+                # fail!
+                raise ValueError(err)
+
+            for artifact in data.get("data", []):
+                if artifact["id"] == artifact_id:
+                    return artifact["object_name"]
+            return None
+        else:
+            # resolve encrypted artifact
+            data = utils.get_with_err_handling(
+                f"{API_ENDPOINT_URL}/artifacts/{artifact_id}",
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+
+            if data and "detail" in data:
+                err = self._handle_call_error(data["detail"])
+                # fail!
+                raise ValueError(err)
+            return data["object_name"]
+
+    def _upload_encrypted_artifact(
+        self,
+        file_path: str = "predictions.csv",
+        order_id: int = None,
+        buyer_public_key: str = None,
+        df: pd.DataFrame = None,
+    ):
+        # write the pandas DataFrame as a binary buffer if provided
+        buffer_csv = None
+
+        if df is not None:
+            buffer_csv = BytesIO(df.to_csv(index=False).encode())
+            buffer_csv.name = file_path
+
+        upload_auth = self._upload_auth_order_artifact(file_path, order_id)
+
+        headers = {"Content-type": "application/octet-stream"}
+        with open(file_path, "rb") if df is None else buffer_csv as file:
+            # encrypt file
+            encrypted_file = utils.encrypt_file_object(file, key=buyer_public_key)
+            requests.put(upload_auth["url"], data=encrypted_file, headers=headers)
+
+        artifact_id = upload_auth["id"]
+        data = utils.post_with_err_handling(
+            f"{API_ENDPOINT_URL}/artifacts/{artifact_id}/validate-upload",
             headers={"Authorization": f"Bearer {self.token}"},
         )
-
-        if data and "detail" in data:
-            err = self._handle_call_error(data["detail"])
-            # fail!
-            raise ValueError(err)
-
-        for artifact in data.get("data", []):
-            if artifact["id"] == artifact_id:
-                return artifact["object_name"]
-        return None
+        return data
 
     def upload_artifact(
         self,
         file_path: str = "predictions.csv",
         product_id: int = None,
         product_full_name: str = None,
+        order_id: int = None,
         df: pd.DataFrame = None,
-    ) -> Dict:
+    ) -> Union[List, Dict]:
         """Upload artifact from file.
         Args:
             file_path (str): file that will get uploaded
             product_id (int): NumerBay product ID
             product_full_name (str): NumerBay product full name (e.g. numerai-predictions-numerbay),
                 used for resolving product_id if product_id is not provided
+            order_id (int, optional): NumerBay order ID, used for encrypted per-order artifact upload
             df (pandas.DataFrame): pandas DataFrame to upload, if function is
                 given df and file_path, df will be uploaded.
         Returns:
-            str: submission_id
+            list or dict: list of artifacts uploaded (for encrypted listing)
+                or the artifact uploaded (for unencrypted listing)
         Example:
             ```python
             api = NumerBay(username="..", password="..")
@@ -558,12 +658,47 @@ class NumerBay:
         self.logger.info("uploading artifact...")
 
         # resolve product ID
-        product_id = self._resolve_product_id(
+        product = self._resolve_product(
             product_id=product_id, product_full_name=product_full_name
         )
-        if product_id is None:
+        if product is None:
             raise ValueError("A valid product ID is required")
+        product_id = product["id"]
+        use_encryption = product.get("use_encryption", False)
 
+        orders_to_upload = []
+        has_unencrypted_sale = False or not use_encryption
+        if use_encryption:
+            active_sales = self.get_my_sales(active_only=True)
+            for sale in active_sales:
+                if order_id is not None and order_id != sale["id"]:
+                    continue
+                if sale["product"]["id"] == product_id:
+                    if sale.get("buyer_public_key", None):
+                        # upload encrypted artifact
+                        orders_to_upload.append(sale)
+                    else:
+                        has_unencrypted_sale = True
+
+        uploaded_artifacts = []
+        for order in orders_to_upload:
+            self.logger.info(
+                f"uploading encrypted artifact for order [{order['id']}] "
+                f"for [{order['buyer']['username']}]..."
+            )
+            # upload encrypted
+            data = self._upload_encrypted_artifact(
+                file_path=file_path,
+                order_id=order["id"],
+                buyer_public_key=order["buyer_public_key"],
+                df=df,
+            )
+            uploaded_artifacts.append(data)
+
+        if use_encryption and not has_unencrypted_sale:
+            return uploaded_artifacts
+
+        # upload unencrypted
         # write the pandas DataFrame as a binary buffer if provided
         buffer_csv = None
 
@@ -582,7 +717,11 @@ class NumerBay:
             f"{API_ENDPOINT_URL}/products/{product_id}/artifacts/{artifact_id}/validate-upload",
             headers={"Authorization": f"Bearer {self.token}"},
         )
-        return data
+        uploaded_artifacts.append(data)
+
+        if use_encryption:
+            return uploaded_artifacts
+        return uploaded_artifacts[0]
 
     def download_artifact(
         self,
@@ -590,18 +729,24 @@ class NumerBay:
         dest_path: str = None,
         product_id: int = None,
         product_full_name: str = None,
-        artifact_id: int = None,
+        order_id: int = None,
+        artifact_id: Union[int, str] = None,
+        key_path: str = None,
+        key_base64: str = None,
     ) -> None:
         """Download artifact file.
         Args:
             filename (str): filename to store as
             dest_path (str, optional): complate path where the file should be
                 stored, defaults to the same name as the source file
-            product_id (int): NumerBay product ID
-            product_full_name (str): NumerBay product full name (e.g. numerai-predictions-numerbay),
+            product_id (int, optional): NumerBay product ID
+            product_full_name (str, optional): NumerBay product full name (e.g. numerai-predictions-numerbay),
                 used for resolving product_id if product_id is not provided
-            artifact_id (str): Artifact ID for the file to download,
+            order_id (int, optional): NumerBay order ID, used for encrypted per-order artifact download
+            artifact_id (str or int, optional): Artifact ID for the file to download,
                 defaults to the first artifact for your active order for the product
+            key_path (int, optional): path to buyer's exported NumerBay key file
+            key_base64 (int, optional): buyer's NumerBay private key base64 string (used for tests)
         Example:
             ```python
             api = NumerBay(username="..", password="..")
@@ -609,19 +754,39 @@ class NumerBay:
             ```
         """
         # resolve product ID
-        product_id = self._resolve_product_id(
+        product = self._resolve_product(
             product_id=product_id, product_full_name=product_full_name
         )
-        if product_id is None:
-            raise ValueError("A valid product ID is required")
+        if product is None and order_id is None and artifact_id is None:
+            raise ValueError(
+                "Failed to resolve artifact: "
+                "make sure you have an active order for this product, "
+                "and an active artifact is available for download"
+            )
+        product_id = product["id"] if product else None
+
+        # resolve order ID
+        order = self._resolve_order(
+            product_id=product_id, order_id=order_id, artifact_id=artifact_id
+        )
+        if order is None and artifact_id is None:
+            raise ValueError(
+                "Failed to resolve artifact: "
+                "make sure you have an active order for this product, "
+                "and an active artifact is available for download"
+            )
+        if order is not None and product_id is None:
+            product_id = order["product"]["id"]
 
         # resolve artifact ID
+        # print(f"product_id: {product_id}, artifact_id: {artifact_id}, order: {order}")
         artifact_id = self._resolve_artifact_id(
-            product_id=product_id, artifact_id=artifact_id
+            product_id=product_id, order=order, artifact_id=artifact_id
         )
+        # print(f"resolved artifact_id: {artifact_id}")
         if artifact_id is None:
             raise ValueError(
-                "Failed to resolve a valid artifact ID: "
+                "Failed to resolve artifact: "
                 "make sure you have an active order for this product, "
                 "and an active artifact is available for download"
             )
@@ -634,17 +799,26 @@ class NumerBay:
                 )
             dest_path = filename
 
-        data = utils.get_with_err_handling(
-            f"{API_ENDPOINT_URL}/products/{product_id}/artifacts/{artifact_id}"
-            f"/generate-download-url",
-            headers={"Authorization": f"Bearer {self.token}"},
-        )
-        print(f"data: {data}")
+        if isinstance(artifact_id, int):
+            # get url for unencrypted artifact
+            file_url = utils.get_with_err_handling(
+                f"{API_ENDPOINT_URL}/products/{product_id}/artifacts/{artifact_id}"
+                f"/generate-download-url",
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+        else:
+            # get url for encrypted artifact
+            file_url = utils.get_with_err_handling(
+                f"{API_ENDPOINT_URL}/artifacts/{artifact_id}/generate-download-url",
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
 
-        if isinstance(data, dict) and "detail" in data:
-            err = self._handle_call_error(data["detail"])
+        if isinstance(file_url, dict) and "detail" in file_url:
+            err = self._handle_call_error(file_url["detail"])
             # fail!
             raise ValueError(err)
 
-        file_url = data
         utils.download_file(file_url, dest_path, self.show_progress_bars)
+
+        if isinstance(artifact_id, str):
+            utils.decrypt_file(dest_path, key_path=key_path, key_base64=key_base64)
