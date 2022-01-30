@@ -606,7 +606,7 @@ def test_download_encrypted_artifact(api, tmpdir):
                 "product": {"id": 4},
                 "buyer": {"id": 2, "username": "myusername"},
                 "buyer_public_key": public_key.decode("ascii"),
-                "artifacts": [{"id": artifact_id}],
+                "artifacts": [{"id": artifact_id, "state": "active"}],
             }
         ],
     }

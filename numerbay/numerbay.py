@@ -17,7 +17,6 @@ import requests
 from numerbay import utils
 
 API_ENDPOINT_URL = "https://numerbay.ai/backend-api/v1"
-API_ENDPOINT_URL = "http://localhost/backend-api/v1"
 
 
 class NumerBay:
@@ -539,8 +538,13 @@ class NumerBay:
             and isinstance(order, dict)
             and order.get("buyer_public_key", None) is not None
         ):
-            # resolve encrypted artifact
-            artifacts = order.get("artifacts", [])
+            # resolve encrypted artifact (active and downloadable)
+            artifacts = [
+                artifact
+                for artifact in order.get("artifacts", [])
+                if artifact["state"] == "active"
+                and not artifact.get("is_numerai_direct", False)
+            ]
             if len(artifacts) > 0:
                 last_artifact = artifacts[-1]
                 return last_artifact["id"]
