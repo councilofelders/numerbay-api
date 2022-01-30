@@ -419,6 +419,111 @@ def test_upload_encrypted_artifact(api, tmpdir):
 
 
 @responses.activate
+def test_upload_numerai_submission(api, tmpdir):
+    key_pair = nacl.public.PrivateKey.generate()
+    public_key = key_pair.public_key.encode(encoder=nacl.encoding.Base64Encoder)
+
+    api.user_id = 2
+    api.token = "Token"
+
+    # mock product search
+    product_id = 2
+    data = {
+        "total": 1,
+        "data": [
+            {
+                "id": product_id,
+                "name": "mymodel",
+                "sku": "numerai-predictions-mymodel",
+                "use_encryption": True,
+            }
+        ],
+    }
+    responses.add(
+        responses.POST, f"{API_ENDPOINT_URL}/products/search-authenticated", json=data
+    )
+
+    # mock order search
+    data = {
+        "total": 1,
+        "data": [
+            {
+                "date_order": "2021-12-25T06:34:58.047278",
+                "round_order": 296,
+                "quantity": 1,
+                "price": 9,
+                "currency": "NMR",
+                "mode": "stake",
+                "stake_limit": None,
+                "submit_model_id": "some_model_id",
+                "submit_model_name": None,
+                "submit_state": None,
+                "chain": "ethereum",
+                "from_address": "0x00000000000000000000000000000fromaddress",
+                "to_address": "0x0000000000000000000000000000000toaddress",
+                "transaction_hash": "0x09bd2a0f814a745f62cb35f1a41dd18208fb653210ff677e946747a20e5abcdef",
+                "state": "confirmed",
+                "applied_coupon_id": 1,
+                "coupon": None,
+                "coupon_specs": None,
+                "id": 126,
+                "product": {"id": product_id},
+                "buyer": {"id": 2, "username": "myusername"},
+                "buyer_public_key": public_key.decode("ascii"),
+            }
+        ],
+    }
+    responses.add(responses.POST, f"{API_ENDPOINT_URL}/orders/search", json=data)
+
+    artifact_id = "abc"
+    data = {"url": "https://numerai_uploadurl", "id": artifact_id}
+    responses.add(
+        responses.POST, f"{API_ENDPOINT_URL}/artifacts/generate-upload-url", json=data
+    )
+    responses.add(responses.PUT, "https://numerai_uploadurl")
+    data = {"id": artifact_id, "is_numerai_direct": True}
+    responses.add(
+        responses.POST,
+        f"{API_ENDPOINT_URL}/artifacts/{artifact_id}/validate-upload",
+        json=data,
+    )
+
+    path = tmpdir.join("somefilepath")
+    path.write("content")
+
+    # upload file with product_id
+    artifacts = api.upload_artifact(str(path), product_id=product_id)
+    assert artifacts[0]["id"] == artifact_id
+    assert artifacts[0]["is_numerai_direct"]
+
+    # upload df with product_id
+    df = pd.DataFrame.from_dict({"id": [], "prediction": []})
+    artifacts = api.upload_artifact(df=df, product_id=product_id)
+    assert artifacts[0]["id"] == artifact_id
+    assert artifacts[0]["is_numerai_direct"]
+
+    # upload file with product_full_name
+    data = {
+        "total": 1,
+        "data": [
+            {
+                "id": product_id,
+                "name": "mymodel",
+                "sku": "numerai-predictions-mymodel",
+                "use_encryption": True,
+            }
+        ],
+    }
+    responses.add(
+        responses.POST, f"{API_ENDPOINT_URL}/products/search-authenticated", json=data
+    )
+    artifacts = api.upload_artifact(
+        str(path), product_full_name="numerai-predictions-mymodel"
+    )
+    assert artifacts[0]["id"] == artifact_id
+
+
+@responses.activate
 def test_download_artifact(api, tmpdir):
     # mock order search
     data = {

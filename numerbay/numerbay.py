@@ -323,11 +323,15 @@ class NumerBay:
         return data
 
     def _upload_auth_order_artifact(
-        self, file_path: str, order_id: int
+        self, file_path: str, order_id: int, is_numerai_direct: bool
     ) -> Dict[str, str]:
         data = utils.post_with_err_handling(
             f"{API_ENDPOINT_URL}/artifacts/generate-upload-url",
-            body={"order_id": order_id, "filename": os.path.basename(file_path)},
+            body={
+                "order_id": order_id,
+                "filename": os.path.basename(file_path),
+                "is_numerai_direct": is_numerai_direct,
+            },
             headers={"Authorization": f"Bearer {self.token}"},
         )
 
@@ -605,6 +609,7 @@ class NumerBay:
         self,
         file_path: str = "predictions.csv",
         order_id: int = None,
+        is_numerai_direct: bool = False,
         buyer_public_key: str = None,
         df: pd.DataFrame = None,
     ):
@@ -615,12 +620,17 @@ class NumerBay:
             buffer_csv = BytesIO(df.to_csv(index=False).encode())
             buffer_csv.name = file_path
 
-        upload_auth = self._upload_auth_order_artifact(file_path, order_id)
+        upload_auth = self._upload_auth_order_artifact(
+            file_path, order_id, is_numerai_direct
+        )
 
         headers = {"Content-type": "application/octet-stream"}
         with open(file_path, "rb") if df is None else buffer_csv as file:
             # encrypt file
-            encrypted_file = utils.encrypt_file_object(file, key=buyer_public_key)
+            if is_numerai_direct:
+                encrypted_file = file
+            else:
+                encrypted_file = utils.encrypt_file_object(file, key=buyer_public_key)
             requests.put(upload_auth["url"], data=encrypted_file, headers=headers)
 
         artifact_id = upload_auth["id"]
@@ -717,14 +727,27 @@ class NumerBay:
                 f"uploading encrypted artifact for order [{order['id']}] "
                 f"for [{order['buyer']['username']}]..."
             )
+
+            # direct submission to Numerai
+            if order.get("submit_model_id", None):
+                data = self._upload_encrypted_artifact(
+                    file_path=file_path,
+                    order_id=order["id"],
+                    is_numerai_direct=True,
+                    buyer_public_key=order["buyer_public_key"],
+                    df=df,
+                )
+                uploaded_artifacts.append(data)
+
             # upload encrypted
-            data = self._upload_encrypted_artifact(
-                file_path=file_path,
-                order_id=order["id"],
-                buyer_public_key=order["buyer_public_key"],
-                df=df,
-            )
-            uploaded_artifacts.append(data)
+            if order["mode"] == "file":
+                data = self._upload_encrypted_artifact(
+                    file_path=file_path,
+                    order_id=order["id"],
+                    buyer_public_key=order["buyer_public_key"],
+                    df=df,
+                )
+                uploaded_artifacts.append(data)
 
         if use_encryption and not has_unencrypted_sale:
             return uploaded_artifacts
