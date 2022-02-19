@@ -6,7 +6,7 @@ def load(path):
     return open(path, "r").read()
 
 
-numerbay_version = "0.2.0"
+numerbay_version = "0.2.1"
 
 
 classifiers = [
@@ -46,6 +46,7 @@ if __name__ == "__main__":
             "tqdm>=4.29.1",
             "click>=7.0",
             "pandas>=1.1.0",
+            "pynacl",
         ],
         entry_points={"console_scripts": ["numerbay = numerbay.cli:cli"]},
     )
