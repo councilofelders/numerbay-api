@@ -750,6 +750,12 @@ class NumerBay:
                 uploaded_artifacts.append(data)
 
         if use_encryption and not has_unencrypted_sale:
+            if len(uploaded_artifacts) == 0:
+                # no upload, likely due to no active sale
+                self.logger.warning(
+                    "Upload canceled, this is likely due to no active sale for encrypted listings. "
+                    "Please try again after a confirmed sale."
+                )
             return uploaded_artifacts
 
         # upload unencrypted
