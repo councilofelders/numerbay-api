@@ -1,6 +1,9 @@
 # Changelog
 Notable changes to this project.
 
+## [0.2.3] - 2022-09-20
+- added exponential backoff retry for requests
+
 ## [0.2.2] - 2022-05-13
 - added warning for encrypted upload when no sale available 
 

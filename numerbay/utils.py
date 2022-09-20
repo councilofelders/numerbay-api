@@ -3,6 +3,7 @@ import io
 import os
 import decimal
 import logging
+import time
 import datetime
 import json
 from io import BytesIO
@@ -96,11 +97,22 @@ def download_file(url: str, dest_path: str, show_progress_bars: bool = True):
 
 
 def get_with_err_handling(
-    url: str, params: Dict = None, headers: Dict = None, timeout: Optional[int] = None
+    url: str,
+    params: Dict = None,
+    headers: Dict = None,
+    timeout: Optional[int] = None,
+    retries: int = 3,
+    delay: int = 1,
+    backoff: int = 2,
 ) -> Dict:
     """send `get` request and handle (some) errors that might occur"""
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=timeout)
+        while 500 <= resp.status_code < 600 and retries > 1:
+            time.sleep(delay)
+            delay *= backoff
+            retries -= 1
+            resp = requests.get(url, params=params, headers=headers, timeout=timeout)
         resp.raise_for_status()
     except requests.exceptions.HTTPError as err:
         logger.error(f"Http Error: {err}, {err.response.json()}")
@@ -128,12 +140,22 @@ def post_with_err_handling(
     json: str = None,  # pylint: disable=W0621
     headers: Dict = None,
     timeout: Optional[int] = None,
+    retries: int = 3,
+    delay: int = 1,
+    backoff: int = 2,
 ) -> Dict:
     """send `post` request and handle (some) errors that might occur"""
     try:
         resp = requests.post(
             url, data=body, json=json, headers=headers, timeout=timeout
         )
+        while 500 <= resp.status_code < 600 and retries > 1:
+            time.sleep(delay)
+            delay *= backoff
+            retries -= 1
+            resp = requests.post(
+                url, data=body, json=json, headers=headers, timeout=timeout
+            )
         resp.raise_for_status()
     except requests.exceptions.HTTPError as err:
         logger.error(f"Http Error: {err}, {err.response.json()}")
