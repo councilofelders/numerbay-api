@@ -1,9 +1,0 @@
-{
-  "items": [
-    "reference/cli",
-    "reference/numerbay",
-    "reference/utils"
-  ],
-  "label": "Python Client",
-  "type": "category"
-}
