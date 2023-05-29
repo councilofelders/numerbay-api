@@ -876,7 +876,12 @@ class NumerBay:
         if isinstance(artifact_id, str):
             utils.decrypt_file(dest_path, key_path=key_path, key_base64=key_base64)
 
-    def lock_product(self, product_id: int = None, product_full_name: str = None, round_number: int = None) -> Dict:
+    def lock_product(
+        self,
+        product_id: int = None,
+        product_full_name: str = None,
+        round_number: int = None,
+    ) -> Dict:
         """Lock product.
         Args:
             product_id (int, optional): NumerBay product ID
