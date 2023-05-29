@@ -6,7 +6,7 @@ def load(path):
     return open(path, "r").read()
 
 
-numerbay_version = "0.2.3"
+numerbay_version = "0.2.4"
 
 
 classifiers = [

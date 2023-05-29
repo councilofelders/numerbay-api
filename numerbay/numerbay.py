@@ -84,6 +84,9 @@ class NumerBay:
         elif isinstance(errors, str):
             msg = errors
             self.logger.error(errors)
+        else:
+            msg = "Unknown error"
+            self.logger.error(msg)
         return msg
 
     def get_account(self) -> Dict:
@@ -872,3 +875,39 @@ class NumerBay:
 
         if isinstance(artifact_id, str):
             utils.decrypt_file(dest_path, key_path=key_path, key_base64=key_base64)
+
+    def lock_product(self, product_id: int = None, product_full_name: str = None, round_number: int = None) -> Dict:
+        """Lock product.
+        Args:
+            product_id (int, optional): NumerBay product ID
+            product_full_name (str, optional): NumerBay product full name
+                (e.g. numerai-predictions-numerbay),
+                used for resolving product_id if product_id is not provided
+            round_number (int, optional): round number to lock, defaults to current selling round
+        Example:
+            ```python
+            api = NumerBay(username="..", password="..")
+            api.lock_product(product_id=2)
+            ```
+        """
+        product = self._resolve_product(
+            product_id=product_id, product_full_name=product_full_name
+        )
+        if product is None:
+            raise ValueError(
+                "Failed to resolve product: "
+                "make sure you have an active product with provided product_id or product_full_name"
+            )
+        product_id = product["id"]
+
+        data = utils.post_with_err_handling(
+            f"{API_ENDPOINT_URL}/products/{product_id}/lock",
+            json={"round_number": round_number},
+            headers={"Authorization": f"Bearer {self.token}"},
+        )
+
+        if data and "detail" in data:
+            err = self._handle_call_error(data["detail"])
+            # fail!
+            raise ValueError(err)
+        return data
